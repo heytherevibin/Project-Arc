@@ -1,0 +1,29 @@
+# Arc MCP Server Dependencies
+
+# MCP Framework
+fastmcp>=0.1.0
+mcp>=0.1.0
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Validation
+pydantic>=2.5.0
+
+# Async utilities
+aiofiles>=23.2.0
+anyio>=4.2.0
+
+# HTTP
+httpx>=0.26.0
+
+# Logging
+structlog>=24.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+orjson>=3.9.0
+
+# Extended recon
+python-whois>=0.9.0

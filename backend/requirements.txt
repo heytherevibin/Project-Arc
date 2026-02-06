@@ -1,0 +1,86 @@
+# =============================================================================
+# Arc Backend - Python Dependencies
+# =============================================================================
+# Pin versions for reproducible builds
+# Update with: pip-compile requirements.in -o requirements.txt
+# =============================================================================
+
+# Web Framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+websockets==12.0
+
+# Configuration & Validation
+pydantic==2.6.1
+pydantic-settings==2.2.1
+email-validator>=2.0.0
+
+# Database
+neo4j==5.17.0
+redis==5.0.1
+
+# PostgreSQL (async)
+asyncpg==0.29.0
+sqlalchemy[asyncio]==2.0.27
+alembic==1.13.1
+
+# Qdrant Vector Store
+qdrant-client==1.7.3
+
+# Authentication
+python-jose[cryptography]==3.3.0
+bcrypt>=4.0.0
+
+# HTTP Client
+httpx==0.26.0
+aiohttp==3.9.3
+
+# Logging
+structlog==24.1.0
+python-json-logger==2.0.7
+
+# MCP Integration
+# fastmcp>=0.1.0  # Install from source if not on PyPI
+
+# LLM Providers
+openai==1.12.0
+anthropic==0.18.1
+
+# Agent Orchestration (LangGraph)
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langchain-anthropic>=0.2.0
+
+# Utilities
+python-dotenv==1.0.1
+tenacity==8.2.3
+orjson==3.9.14
+
+# Async utilities
+asyncio-throttle==1.0.2
+aiocache==0.12.2
+
+# Scheduling (continuous monitoring)
+apscheduler==3.10.4
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Network utilities
+dnspython==2.6.1
+validators==0.22.0
+
+# Elasticsearch
+elasticsearch[async]==8.12.1
+
+# GraphQL
+strawberry-graphql[fastapi]==0.219.2
+
+# PDF Export
+weasyprint==62.3
+markdown==3.5.2
+
+# CLI
+click==8.1.7

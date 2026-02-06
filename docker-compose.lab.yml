@@ -1,0 +1,74 @@
+# =============================================================================
+# Arc - Lab Environment (Vulnerable Targets for Testing)
+# =============================================================================
+# Usage: docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d
+# Or:    make lab
+# =============================================================================
+# WARNING: These services are intentionally vulnerable. NEVER expose to the
+# internet. Bind only to localhost or an isolated lab network.
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # DVWA - Damn Vulnerable Web Application
+  # ===========================================================================
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: arc-lab-dvwa
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8880:80"
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+    networks:
+      - arc-lab
+      - arc-tools
+    labels:
+      - "com.arc.service=lab-dvwa"
+      - "com.arc.lab=true"
+
+  # ===========================================================================
+  # OWASP Juice Shop
+  # ===========================================================================
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: arc-lab-juice-shop
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8881:3000"
+    networks:
+      - arc-lab
+      - arc-tools
+    labels:
+      - "com.arc.service=lab-juice-shop"
+      - "com.arc.lab=true"
+
+  # ===========================================================================
+  # OWASP WebGoat
+  # ===========================================================================
+  webgoat:
+    image: webgoat/webgoat:latest
+    container_name: arc-lab-webgoat
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8882:8080"
+    environment:
+      - WEBGOAT_PORT=8080
+    networks:
+      - arc-lab
+      - arc-tools
+    labels:
+      - "com.arc.service=lab-webgoat"
+      - "com.arc.lab=true"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  arc-lab:
+    name: arc-lab
+    driver: bridge
+    internal: true   # Lab targets isolated from internet
+
+  arc-tools:
+    external: true   # Reuse from main compose so MCP tools can reach lab targets

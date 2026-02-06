@@ -1,0 +1,433 @@
+# =============================================================================
+# Arc - Enterprise Red Team Framework
+# Production-Ready Docker Compose Configuration
+# =============================================================================
+# Uses Compose Specification (version field obsolete in Compose v2+)
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # API Backend
+  # ===========================================================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: arc-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      - APP_ENV=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8080
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - POSTGRES_URL=postgresql+asyncpg://${POSTGRES_USER:-arc}:${POSTGRES_PASSWORD:-arc_secret}@postgres:5432/${POSTGRES_DB:-arc}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=json
+      - LOG_TO_ELK=true
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - CORS_ORIGIN_REGEX=${CORS_ORIGIN_REGEX:-}
+      # MCP URLs: defaults so API in Docker always reaches mcp-recon (each tool has its own port)
+      - MCP_NAABU_URL=${MCP_NAABU_URL:-http://mcp-recon:8000}
+      - MCP_HTTPX_URL=${MCP_HTTPX_URL:-http://mcp-recon:8001}
+      - MCP_SUBFINDER_URL=${MCP_SUBFINDER_URL:-http://mcp-recon:8002}
+      - MCP_DNSX_URL=${MCP_DNSX_URL:-http://mcp-recon:8003}
+      - MCP_KATANA_URL=${MCP_KATANA_URL:-http://mcp-recon:8004}
+      - MCP_NUCLEI_URL=${MCP_NUCLEI_URL:-http://mcp-recon:8005}
+      # Extended recon (ports 8006–8012)
+      - MCP_GAU_URL=${MCP_GAU_URL:-http://mcp-recon:8006}
+      - MCP_KNOCKPY_URL=${MCP_KNOCKPY_URL:-http://mcp-recon:8007}
+      - MCP_KITERUNNER_URL=${MCP_KITERUNNER_URL:-http://mcp-recon:8008}
+      - MCP_WAPPALYZER_URL=${MCP_WAPPALYZER_URL:-http://mcp-recon:8009}
+      - MCP_WHOIS_URL=${MCP_WHOIS_URL:-http://mcp-recon:8010}
+      - MCP_SHODAN_URL=${MCP_SHODAN_URL:-http://mcp-recon:8011}
+      - MCP_GITHUB_RECON_URL=${MCP_GITHUB_RECON_URL:-http://mcp-recon:8012}
+      # Vulnerability scanning (8013-8014)
+      - MCP_GVM_URL=${MCP_GVM_URL:-http://mcp-recon:8013}
+      - MCP_NIKTO_URL=${MCP_NIKTO_URL:-http://mcp-recon:8014}
+      # Exploitation (8022)
+      - MCP_COMMIX_URL=${MCP_COMMIX_URL:-http://mcp-recon:8022}
+      # C2 (8030-8031)
+      - MCP_SLIVER_URL=${MCP_SLIVER_URL:-http://mcp-recon:8030}
+      - MCP_HAVOC_URL=${MCP_HAVOC_URL:-http://mcp-recon:8031}
+      # AD/Identity (8040-8043)
+      - MCP_BLOODHOUND_URL=${MCP_BLOODHOUND_URL:-http://mcp-recon:8040}
+      - MCP_CERTIPY_URL=${MCP_CERTIPY_URL:-http://mcp-recon:8041}
+      - MCP_IMPACKET_URL=${MCP_IMPACKET_URL:-http://mcp-recon:8042}
+      - MCP_CRACKMAPEXEC_URL=${MCP_CRACKMAPEXEC_URL:-http://mcp-recon:8043}
+      # Utilities (8050-8052)
+      - MCP_CURL_URL=${MCP_CURL_URL:-http://mcp-recon:8050}
+      - MCP_PROXYCHAINS_URL=${MCP_PROXYCHAINS_URL:-http://mcp-recon:8051}
+      - MCP_TOR_URL=${MCP_TOR_URL:-http://mcp-recon:8052}
+      # Continuous monitoring (scheduler runs inside API container)
+      - MONITORING_ENABLED=${MONITORING_ENABLED:-true}
+      - MONITORING_DEFAULT_INTERVAL_HOURS=${MONITORING_DEFAULT_INTERVAL_HOURS:-24}
+    networks:
+      - arc-frontend
+      - arc-backend
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      mcp-recon:
+        condition: service_started  # Optional: start MCP so scans get real results
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.arc.service=api"
+      - "com.arc.version=${APP_VERSION:-0.1.0}"
+
+  # ===========================================================================
+  # Frontend (Mission Control)
+  # ===========================================================================
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:8080}
+    container_name: arc-webapp
+    restart: unless-stopped
+    ports:
+      - "${WEBAPP_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:8080}
+    networks:
+      - arc-frontend
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.arc.service=webapp"
+
+  # ===========================================================================
+  # Neo4j Graph Database
+  # ===========================================================================
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: arc-neo4j
+    restart: unless-stopped
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      # Healthcheck password in non-NEO4J_ var so Neo4j doesn't treat it as config (strict validation)
+      - CYPHER_SHELL_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_PLUGINS=["apoc","graph-data-science"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_dbms_memory_pagecache_size=512m
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    networks:
+      - arc-backend
+      - arc-data
+    healthcheck:
+      # Cypher-shell verifies Bolt (what the API uses) and is bundled in the image
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p \"$$CYPHER_SHELL_PASSWORD\" \"RETURN 1\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+    labels:
+      - "com.arc.service=neo4j"
+
+  # ===========================================================================
+  # PostgreSQL (Episodic Memory, Missions, Persistent State)
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: arc-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-arc}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-arc_secret}
+      - POSTGRES_DB=${POSTGRES_DB:-arc}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - arc-backend
+      - arc-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arc} -d ${POSTGRES_DB:-arc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      - "com.arc.service=postgres"
+
+  # ===========================================================================
+  # Qdrant Vector Database (Semantic Memory Embeddings)
+  # ===========================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: arc-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - arc-backend
+      - arc-data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.arc.service=qdrant"
+
+  # ===========================================================================
+  # Redis Cache
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: arc-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - arc-backend
+      - arc-data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "com.arc.service=redis"
+
+  # ===========================================================================
+  # Elasticsearch (ELK Stack)
+  # ===========================================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: arc-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=arc-cluster
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - arc-backend
+      - arc-data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "com.arc.service=elasticsearch"
+
+  # ===========================================================================
+  # Kibana (Log Visualization)
+  # ===========================================================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: arc-kibana
+    restart: unless-stopped
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=arc-kibana
+      - XPACK_SECURITY_ENABLED=false
+    networks:
+      - arc-backend
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"level\":\"available\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    labels:
+      - "com.arc.service=kibana"
+
+  # ===========================================================================
+  # Logstash (Log Processing)
+  # ===========================================================================
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: arc-logstash
+    restart: unless-stopped
+    ports:
+      - "${LOGSTASH_PORT:-5044}:5044"
+    environment:
+      - XPACK_MONITORING_ENABLED=false
+    volumes:
+      - ./infrastructure/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./infrastructure/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    networks:
+      - arc-backend
+      - arc-data
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    labels:
+      - "com.arc.service=logstash"
+
+  # ===========================================================================
+  # MCP Recon Server (Kali-based tools)
+  # ===========================================================================
+  mcp-recon:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile.recon
+    container_name: arc-mcp-recon
+    restart: unless-stopped
+    ports:
+      # Core Recon (8000-8005)
+      - "${MCP_NAABU_PORT:-8000}:8000"
+      - "${MCP_HTTPX_PORT:-8001}:8001"
+      - "${MCP_SUBFINDER_PORT:-8002}:8002"
+      - "${MCP_DNSX_PORT:-8003}:8003"
+      - "${MCP_KATANA_PORT:-8004}:8004"
+      - "${MCP_NUCLEI_PORT:-8005}:8005"
+      # Extended Recon (8006-8012)
+      - "${MCP_GAU_PORT:-8006}:8006"
+      - "${MCP_KNOCKPY_PORT:-8007}:8007"
+      - "${MCP_KITERUNNER_PORT:-8008}:8008"
+      - "${MCP_WAPPALYZER_PORT:-8009}:8009"
+      - "${MCP_WHOIS_PORT:-8010}:8010"
+      - "${MCP_SHODAN_PORT:-8011}:8011"
+      - "${MCP_GITHUB_RECON_PORT:-8012}:8012"
+      # Vulnerability Scanning (8013-8014)
+      - "${MCP_GVM_PORT:-8013}:8013"
+      - "${MCP_NIKTO_PORT:-8014}:8014"
+      # Exploitation (8020-8022)
+      - "${MCP_METASPLOIT_PORT:-8020}:8020"
+      - "${MCP_SQLMAP_PORT:-8021}:8021"
+      - "${MCP_COMMIX_PORT:-8022}:8022"
+      # C2 (8030-8031)
+      - "${MCP_SLIVER_PORT:-8030}:8030"
+      - "${MCP_HAVOC_PORT:-8031}:8031"
+      # AD/Identity (8040-8043)
+      - "${MCP_BLOODHOUND_PORT:-8040}:8040"
+      - "${MCP_CERTIPY_PORT:-8041}:8041"
+      - "${MCP_IMPACKET_PORT:-8042}:8042"
+      - "${MCP_CRACKMAPEXEC_PORT:-8043}:8043"
+      # Utilities (8050-8052)
+      - "${MCP_CURL_PORT:-8050}:8050"
+      - "${MCP_PROXYCHAINS_PORT:-8051}:8051"
+      - "${MCP_TOR_PORT:-8052}:8052"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SHODAN_API_KEY=${SHODAN_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    volumes:
+      - mcp-output:/app/output
+      - ./mcp/nuclei-templates:/app/nuclei-templates:ro
+    networks:
+      - arc-backend
+      - arc-tools
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.arc.service=mcp-recon"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  arc-frontend:
+    name: arc-frontend
+    driver: bridge
+
+  arc-backend:
+    name: arc-backend
+    driver: bridge
+
+  arc-data:
+    name: arc-data
+    driver: bridge
+    internal: true
+
+  arc-tools:
+    name: arc-tools
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  neo4j-data:
+    name: arc-neo4j-data
+  neo4j-logs:
+    name: arc-neo4j-logs
+  postgres-data:
+    name: arc-postgres-data
+  qdrant-data:
+    name: arc-qdrant-data
+  redis-data:
+    name: arc-redis-data
+  elasticsearch-data:
+    name: arc-elasticsearch-data
+  mcp-output:
+    name: arc-mcp-output

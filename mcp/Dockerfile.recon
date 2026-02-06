@@ -1,0 +1,84 @@
+# =============================================================================
+# Arc MCP Recon Server - Kali-based Reconnaissance Tools
+# =============================================================================
+
+FROM kalilinux/kali-rolling:latest
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update and install base dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    wget \
+    unzip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ProjectDiscovery tools from pre-built releases (avoids Go build failures)
+# TARGETARCH is set by Docker Buildx (linux/amd64 -> amd64, linux/arm64 -> arm64) for Apple Silicon
+ARG TARGETARCH
+ENV PD_TOOLS=/usr/local/bin
+RUN set -eux; \
+    case "${TARGETARCH}" in arm64|aarch64) PD_ARCH=arm64;; *) PD_ARCH=amd64;; esac; \
+    wget -q "https://github.com/projectdiscovery/subfinder/releases/download/v2.12.0/subfinder_2.12.0_linux_${PD_ARCH}.zip" -O /tmp/sf.zip \
+    && unzip -o -j /tmp/sf.zip -d /tmp/sf && mv /tmp/sf/subfinder* ${PD_TOOLS}/subfinder && chmod +x ${PD_TOOLS}/subfinder && rm -rf /tmp/sf /tmp/sf.zip; \
+    wget -q "https://github.com/projectdiscovery/dnsx/releases/download/v1.2.1/dnsx_1.2.1_linux_${PD_ARCH}.zip" -O /tmp/dx.zip \
+    && unzip -o -j /tmp/dx.zip -d /tmp/dx && mv /tmp/dx/dnsx* ${PD_TOOLS}/dnsx && chmod +x ${PD_TOOLS}/dnsx && rm -rf /tmp/dx /tmp/dx.zip; \
+    wget -q "https://github.com/projectdiscovery/naabu/releases/download/v2.3.0/naabu_2.3.0_linux_${PD_ARCH}.zip" -O /tmp/nb.zip \
+    && unzip -o -j /tmp/nb.zip -d /tmp/nb && mv /tmp/nb/naabu* ${PD_TOOLS}/naabu && chmod +x ${PD_TOOLS}/naabu && rm -rf /tmp/nb /tmp/nb.zip; \
+    wget -q "https://github.com/projectdiscovery/httpx/releases/download/v1.6.10/httpx_1.6.10_linux_${PD_ARCH}.zip" -O /tmp/hx.zip \
+    && unzip -o -j /tmp/hx.zip -d /tmp/hx && mv /tmp/hx/httpx* ${PD_TOOLS}/httpx && chmod +x ${PD_TOOLS}/httpx && rm -rf /tmp/hx /tmp/hx.zip; \
+    wget -q "https://github.com/projectdiscovery/katana/releases/download/v1.0.0/katana_1.0.0_linux_${PD_ARCH}.zip" -O /tmp/kt.zip \
+    && unzip -o -j /tmp/kt.zip -d /tmp/kt && mv /tmp/kt/katana* ${PD_TOOLS}/katana && chmod +x ${PD_TOOLS}/katana && rm -rf /tmp/kt /tmp/kt.zip; \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v3.2.2/nuclei_3.2.2_linux_${PD_ARCH}.zip" -O /tmp/nu.zip \
+    && unzip -o -j /tmp/nu.zip -d /tmp/nu && mv /tmp/nu/nuclei* ${PD_TOOLS}/nuclei && chmod +x ${PD_TOOLS}/nuclei && rm -rf /tmp/nu /tmp/nu.zip
+
+# Update Nuclei templates
+RUN nuclei -update-templates
+
+# Extended recon: GAU (getallurls on Kali), Kiterunner
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends getallurls 2>/dev/null || true; \
+    case "${TARGETARCH}" in arm64|aarch64) KR_ARCH=arm64;; *) KR_ARCH=amd64;; esac; \
+    wget -q "https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_${KR_ARCH}.tar.gz" -O /tmp/kr.tar.gz 2>/dev/null && \
+    tar -xzf /tmp/kr.tar.gz -C /tmp && mv /tmp/kr ${PD_TOOLS}/kiterunner 2>/dev/null && chmod +x ${PD_TOOLS}/kiterunner && rm -rf /tmp/kr.tar.gz /tmp/kr 2>/dev/null || true
+# GAU from lc/gau if getallurls not available
+RUN set -eux; \
+    if ! command -v getallurls >/dev/null 2>&1 && ! command -v gau >/dev/null 2>&1; then \
+      case "${TARGETARCH}" in arm64|aarch64) GAU_ARCH=arm64;; *) GAU_ARCH=amd64;; esac; \
+      wget -q "https://github.com/lc/gau/releases/download/v2.2.2/gau_2.2.2_linux_${GAU_ARCH}.tar.gz" -O /tmp/gau.tar.gz && \
+      tar -xzf /tmp/gau.tar.gz -C ${PD_TOOLS} && chmod +x ${PD_TOOLS}/gau && rm /tmp/gau.tar.gz; \
+    fi
+
+# Create application directory
+WORKDIR /app
+
+# Create virtual environment
+RUN python3 -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy MCP server code
+COPY servers/ ./servers/
+
+# Create output directory
+RUN mkdir -p /app/output
+
+# Expose MCP server ports
+# Core recon: 8000-8005 | Extended recon: 8006-8012
+# Exploit: 8020-8022 | C2: 8030 | AD/Identity: 8040-8043
+EXPOSE 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8011 8012 8020 8021 8030 8040 8042 8043
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run all MCP servers
+CMD ["python", "-m", "servers.main"]

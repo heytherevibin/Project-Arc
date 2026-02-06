@@ -1,0 +1,57 @@
+{
+  "name": "arc-mission-control",
+  "version": "0.1.0",
+  "description": "Arc Mission Control - Enterprise Red Team Dashboard",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "postinstall": "node -e \"if (process.env.npm_config_devdir !== undefined) { console.log('\\n  Tip: To avoid the devdir warning, use ./npmw instead of npm (e.g. ./npmw run dev)\\n'); }\""
+  },
+  "dependencies": {
+    "@ant-design/cssinjs": "^1.18.0",
+    "@ant-design/icons": "^5.3.0",
+    "@ant-design/v5-patch-for-react-19": "^1.0.3",
+    "@types/three": "^0.182.0",
+    "antd": "^5.15.0",
+    "clsx": "^2.1.0",
+    "d3-force": "^3.0.0",
+    "dayjs": "^1.11.0",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
+    "next": "16.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-force-graph-2d": "^1.25.0",
+    "react-force-graph-3d": "^1.29.1",
+    "swr": "^2.2.0",
+    "three": "^0.182.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/d3-force": "^3.0.0",
+    "@types/node": "^20.11.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.5.0",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^9.26.0",
+    "eslint-config-next": "16.1.6",
+    "jsdom": "^25.0.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

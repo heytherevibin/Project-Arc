@@ -1,0 +1,202 @@
+# Arc - Enterprise Red Team Framework
+# Comprehensive .gitignore for Python, Node.js, Docker environments
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.conda/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# Translations
+*.mo
+*.pot
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Pyre
+.pyre/
+
+# pytype
+.pytype/
+
+# =============================================================================
+# Node.js / Next.js
+# =============================================================================
+node_modules/
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Next.js
+.next/
+out/
+.nuxt/
+.output/
+.vercel
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# =============================================================================
+# Docker
+# =============================================================================
+# Docker volumes (if mounted locally)
+docker-data/
+neo4j-data/
+redis-data/
+elasticsearch-data/
+postgres-data/
+
+# =============================================================================
+# IDE & Editor
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# OS Generated
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# Scan outputs and reports
+output/
+reports/
+scans/
+*.json.tmp
+
+# MCP server outputs
+mcp/output/
+
+# Neo4j imports
+graph/imports/
+
+# Nuclei templates cache
+nuclei-templates/
+
+# Log files
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Generated documentation
+docs/_build/
+site/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Profiling
+*.prof
+*.lprof

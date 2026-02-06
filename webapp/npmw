@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Wrapper to run npm without NPM_CONFIG_DEVDIR (avoids "Unknown env config devdir" warning).
+# Standard workaround when the environment (e.g. Cursor IDE) sets this variable.
+# Usage: ./npmw run type-check   or   ./npmw install
+# On Windows: node scripts/run-npm-without-devdir.js run type-check
+unset npm_config_devdir
+exec npm "$@"

@@ -1,0 +1,18 @@
+# Arc Logstash Configuration
+
+http.host: "0.0.0.0"
+xpack.monitoring.enabled: false
+
+# Pipeline settings
+pipeline.workers: 2
+pipeline.batch.size: 125
+pipeline.batch.delay: 50
+
+# Logging
+log.level: info
+log.format: plain
+
+# Path settings
+path.config: /usr/share/logstash/pipeline
+path.data: /usr/share/logstash/data
+path.logs: /usr/share/logstash/logs

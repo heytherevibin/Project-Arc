@@ -1,0 +1,59 @@
+# =============================================================================
+# Arc - Development Docker Compose Override
+# =============================================================================
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# =============================================================================
+
+services:
+  # API with hot-reload and development target
+  api:
+    build:
+      target: development
+    volumes:
+      - ./backend/src:/app/src:cached
+    environment:
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=console
+      - LOG_TO_ELK=false
+    command: ["python", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+  # Webapp with hot-reload (dev server)
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+      target: deps
+    volumes:
+      - ./webapp/src:/app/src:cached
+      - ./webapp/package.json:/app/package.json
+    environment:
+      - NODE_ENV=development
+    command: ["npx", "next", "dev", "--port", "3000"]
+
+  # Neo4j with APOC + GDS for development
+  neo4j:
+    environment:
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_dbms_memory_pagecache_size=256m
+
+  # Lighter resource usage for Postgres in dev
+  postgres:
+    environment:
+      - POSTGRES_PASSWORD=arc_secret
+
+  # Qdrant with smaller storage config for dev
+  qdrant:
+    environment:
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
+
+  # Skip ELK stack in development (lighter resource usage)
+  elasticsearch:
+    profiles: ["elk"]
+
+  kibana:
+    profiles: ["elk"]
+
+  logstash:
+    profiles: ["elk"]
