@@ -1,307 +1,320 @@
-# Arc - Enterprise Autonomous AI Red Team Framework
+# Project Arc
 
-Arc is an enterprise-grade autonomous AI-powered penetration testing and red team framework. It automates reconnaissance, vulnerability discovery, and attack surface mapping using a sophisticated pipeline of security tools orchestrated through MCP (Model Context Protocol).
+**Enterprise autonomous AI red team and penetration testing framework.** Arc automates reconnaissance, vulnerability discovery, attack surface mapping, and reporting through a mission-control dashboard, a modular recon pipeline backed by MCP (Model Context Protocol) tool servers, and a Neo4j-powered graph of assets and findings.
+
+---
+
+## Overview
+
+Arc provides:
+
+- **Mission Control UI** — Next.js dashboard (Project ARC) with dark, mission-control styling: projects, targets, scans, vulnerabilities, attack surface graph (2D/3D), attack paths, identity graph, missions, approvals, chat, settings, and real-time WebSocket status.
+- **Reconnaissance pipeline** — Orchestrated subdomain enumeration (Subfinder, optional Knockpy), DNS resolution (dnsx), port scanning (Naabu), HTTP probing (Httpx), web crawling (Katana), vulnerability scanning (Nuclei), plus optional enrichment (Whois, GAU, Wappalyzer, Shodan, Kiterunner, GitHub recon). Pipeline is split into **orchestrators** (tool runners returning normalized data) and pipeline (Neo4j storage and phase progress).
+- **Neo4j attack surface graph** — Domains, subdomains, IPs, ports, URLs, technologies, vulnerabilities, WHOIS, Shodan, API endpoints, GitHub repos/findings. Schema includes core attack surface, identity (AD/Azure), attack graph, and MITRE ATT&CK; indexes live in `indexes.cypher`.
+- **Backend API** — FastAPI: auth (JWT), projects, targets, scans, vulnerabilities, **findings** (CRUD for manual findings), reports, graph data/stats/attack paths, recon tools health, monitoring jobs, settings (pipeline tool toggles), missions, agents; WebSocket for real-time updates (handler/events/streams); optional GraphQL.
+- **AI and agents** — LangGraph workflow (supervisor + specialists: recon, vuln analysis, exploit, post-exploit, lateral, report) with approval gates; cognitive memory (episodic, semantic, procedural, working); intelligence (MITRE mapping, pathfinding, scoring, planner); optional Sliver C2 gRPC client (`backend/src/c2/`).
+- **Reporting** — Executive summary, technical report, remediation, compliance; Markdown templates (executive_summary.md, technical_report.md, remediation.md) and template loader; PDF and SARIF exporters.
+- **Infrastructure** — Docker Compose: API, webapp, Neo4j (with GDS/APOC), PostgreSQL, Redis, Qdrant, Elasticsearch, Kibana, Logstash, MCP recon container (multi-port tool servers). Optional lab compose for vulnerable targets (DVWA, Juice Shop, WebGoat).
+
+All configuration is via environment variables; no hardcoded secrets or URLs in code.
+
+---
 
 ## Features
 
-- **Automated Reconnaissance Pipeline**: Subdomain enumeration, DNS resolution, port scanning, HTTP probing, web crawling, and vulnerability scanning
-- **Neo4j Attack Surface Graph**: All discovered assets are stored in a graph database for relationship analysis
-- **Interactive Graph Visualization**: Visual exploration of attack surface with force-directed graph rendering
-- **Real-time Updates**: WebSocket-based live updates for scan progress and findings
-- **Enterprise UI**: Dark minimal Mission Control dashboard built with Next.js and Ant Design
-- **Project & Scan Reports**: Comprehensive reporting with vulnerability summaries and risk scores
-- **MCP Tool Integration**: Security tools exposed via FastMCP servers
-- **ELK Stack Logging**: Structured logging with Elasticsearch, Logstash, and Kibana
-- **JWT Authentication**: Secure API access with token-based authentication
+| Area | Capabilities |
+|------|----------------|
+| **Recon** | Subdomain enum (Subfinder, Knockpy), DNS (dnsx), port scan (Naabu), HTTP probe (Httpx), crawl (Katana), vuln scan (Nuclei), passive DNS (CT), Whois, GAU, Wappalyzer, Shodan, Kiterunner, GitHub recon |
+| **Data** | Neo4j (graph), PostgreSQL (episodic/missions), Redis (cache), Qdrant (vector), Elasticsearch (logs) |
+| **UI** | Projects, targets, scans with result tabs (subdomains, IPs, ports, URLs, tech, WHOIS, Shodan, API endpoints, GitHub), vulnerabilities, manual findings, reports, 2D/3D attack graph, attack paths, identity graph, missions, approvals, agent chat, settings, MCP health |
+| **API** | REST (`/api/v1/...`): auth, projects, targets, scans, vulnerabilities, findings, reports, graph, tools, monitoring, settings, missions, agents; WebSocket `/ws`; optional GraphQL |
+| **Automation** | Continuous monitoring (scheduler + jobs/trigger API), configurable pipeline tool set per Settings |
+
+---
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Mission Control (Next.js)                   │
-│                     Port 3000                                   │
+│                  Mission Control (Next.js)                       │
+│                  Port 3000                                      │
 └─────────────────────────────────┬───────────────────────────────┘
                                   │
 ┌─────────────────────────────────┼───────────────────────────────┐
-│                     API Gateway (FastAPI)                       │
-│                     Port 8080                                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │   REST   │  │WebSocket │  │   Auth   │  │  Health  │         │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘         │
+│                  API (FastAPI) · Port 8080                      │
+│  REST · WebSocket · Auth · Graph · Reports · Findings · Agents  │
 └─────────────────────────────────┬───────────────────────────────┘
                                   │
-        ┌─────────────────────────┼─────────────────────────┐
-        │                         │                         │
-┌───────┴───────┐         ┌───────┴───────┐         ┌───────┴───────┐
-│    Neo4j      │         │     Redis     │         │ Elasticsearch │
-│   Port 7687   │         │   Port 6379   │         │   Port 9200   │
-└───────────────┘         └───────────────┘         └───────────────┘
-                                  │
-┌─────────────────────────────────┼───────────────────────────────┐
-│                     MCP Recon Server (Kali)                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │  Naabu   │  │  Httpx   │  │Subfinder │  │  Nuclei  │         │
-│  │  :8000   │  │  :8001   │  │  :8002   │  │  :8005   │         │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘         │
-│  ┌──────────┐  ┌──────────┐                                     │
-│  │   dnsx   │  │  Katana  │                                     │
-│  │  :8003   │  │  :8004   │                                     │
-│  └──────────┘  └──────────┘                                     │
-└─────────────────────────────────────────────────────────────────┘
+    ┌─────────────┬───────────────┼───────────────┬─────────────┐
+    │             │               │               │             │
+┌───┴───┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌────┴────┐
+│ Neo4j │   │ Postgres  │   │  Redis   │   │ Qdrant   │   │  ELK   │
+│ 7687  │   │  5432     │   │  6379    │   │  6333    │   │ 9200   │
+└───────┘   └───────────┘   └──────────┘   └──────────┘   └────────┘
+    │
+    │  MCP tool servers (mcp-recon container; one port per tool)
+┌───┴───────────────────────────────────────────────────────────────┐
+│ Naabu · Httpx · Subfinder · dnsx · Katana · Nuclei · GAU · ...   │
+│ 8000   8001    8002       8003  8004     8005      8006           │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+---
+
+## Project structure
+
+```
+arc/
+├── backend/                    # Python FastAPI backend
+│   ├── src/
+│   │   ├── api/               # REST, WebSocket, GraphQL, middleware
+│   │   │   ├── routes/        # auth, projects, targets, scans, vulnerabilities,
+│   │   │   │                  # findings, reports, graph, monitoring, settings,
+│   │   │   │                  # missions, agents, websocket
+│   │   │   └── websocket/     # handler, events, streams
+│   │   ├── agents/            # LangGraph supervisor + specialists, workflow, supervisor_graph
+│   │   ├── c2/                # Sliver gRPC client (optional)
+│   │   ├── core/              # Config, logging, exceptions, constants
+│   │   ├── graph/             # Neo4j client, schema (cypher), indexes, queries, projections
+│   │   ├── intelligence/     # MITRE, pathfinding, scoring, planner (AGE, CALDERA)
+│   │   ├── memory/           # Episodic, semantic, procedural, working memory
+│   │   ├── recon/            # Pipeline + orchestrators + tools
+│   │   │   ├── orchestrators/ # passive_dns, subdomain_enum, port_scan, http_probe,
+│   │   │   │                  # web_crawl, shodan, github, whois, gau, wappalyzer,
+│   │   │   │                  # knockpy, kiterunner
+│   │   │   ├── tools/        # MCP-backed tools (Subfinder, dnsx, Naabu, etc.)
+│   │   │   ├── passive/      # Cert transparency, OSINT
+│   │   │   ├── continuous/   # Monitor, alerting, diff
+│   │   │   └── stealth/      # Rate limit, Tor wrapper
+│   │   └── reporting/        # Generators, exporters, Markdown templates + loader
+│   ├── tests/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── webapp/                     # Next.js Mission Control
+│   ├── src/app/               # Login, register, dashboard (overview, projects, targets,
+│   │   │                       # scans, vulnerabilities, graph, attack-paths, identity,
+│   │   │                       # missions, approvals, chat, timeline, settings)
+│   │   ├── components/        # C2 panels, graph, chat, approval, dashboard
+│   │   ├── hooks/             # useWebSocket
+│   │   ├── lib/               # api, theme, neo4j helpers, d3-force-3d, reportExport
+│   │   └── store/             # Zustand (auth, app)
+│   ├── Dockerfile
+│   └── package.json
+├── mcp/                        # MCP tool servers (single image, multiple ports)
+│   ├── servers/               # Naabu, Httpx, Subfinder, dnsx, Katana, Nuclei, GAU,
+│   │   │                       # Knockpy, Kiterunner, Wappalyzer, Whois, Shodan,
+│   │   │                       # GitHub recon, GVM, Nikto, Commix, Sliver, Havoc,
+│   │   │                       # BloodHound, Certipy, Impacket, CrackMapExec, etc.
+│   ├── Dockerfile.recon
+│   └── requirements.txt
+├── infrastructure/             # Logstash pipeline (ELK)
+├── lab/                       # Optional vulnerable targets (README, docker-compose.lab)
+├── docs/                      # Implementation roadmap, status, extended recon
+├── scripts/                   # rebuild.sh
+├── docker-compose.yml         # API, webapp, Neo4j, Postgres, Redis, Qdrant, ELK, mcp-recon
+├── docker-compose.dev.yml     # Dev overrides
+├── docker-compose.lab.yml     # DVWA, Juice Shop, WebGoat
+├── Makefile                   # build, up, down, dev, lab, test, health, db-*
+└── .env.example               # Environment template
+```
+
+---
+
+## Quick start
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- At least 8GB RAM
-- Ports 3000, 8080, 7474, 7687, 6379, 9200, 5601 available
+- 8GB+ RAM recommended
+- Ports 3000, 8080, 5432, 6333, 6379, 7474, 7687, 9200, 5601 (and MCP ports if exposed) free
 
-### 1. Clone and Configure
+### 1. Clone and configure
 
 ```bash
-# Copy environment template
+git clone https://github.com/heytherevibin/Project-Arc.git arc && cd arc
 cp .env.example .env
-
-# Edit .env and set required values:
-# - JWT_SECRET_KEY (generate with: openssl rand -hex 32)
-# - NEO4J_PASSWORD
-# - OPENAI_API_KEY or ANTHROPIC_API_KEY (for AI agent features)
 ```
 
-### 2. Start Services
+Edit `.env` and set at least:
+
+- `JWT_SECRET_KEY` — e.g. `openssl rand -hex 32`
+- `NEO4J_PASSWORD` — Neo4j auth
+- `CORS_ORIGINS` — e.g. `http://localhost:3000,http://127.0.0.1:3000`
+
+Optional: LLM keys (OpenAI/Anthropic) for agents; MCP URLs default to `http://mcp-recon:8000` etc. for Docker.
+
+### 2. Start stack
 
 ```bash
-# Start all services
 docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Check health
-curl http://localhost:8080/health
+# Or: make up
 ```
 
-**Full clean rebuild** (no cache; use if images or config are stale):
+Wait for health (e.g. `make health` or `curl -s http://localhost:8080/health`). Then open:
+
+- **Mission Control:** http://localhost:3000  
+- **API docs:** http://localhost:8080/docs  
+- **Neo4j Browser:** http://localhost:7474 (user `neo4j`, password from `NEO4J_PASSWORD`)
+
+### 3. First use
+
+1. Register a user at http://localhost:3000/register  
+2. Create a project, add a target (e.g. domain or `scanme.nmap.org`)  
+3. Run a scan; view results in Scan Results (subdomains, IPs, ports, URLs, vulns, etc.) and in Targets / Vulnerabilities  
+4. Use **Settings → Check MCP URLs** to verify tool endpoints; enable/disable pipeline tools (Whois, GAU, Shodan, Knockpy, Kiterunner, GitHub recon, etc.)
+
+**Full rebuild (no cache):**
 
 ```bash
 ./scripts/rebuild.sh
 # Or: docker compose down && docker compose build --no-cache && docker compose up -d
 ```
 
-**If Neo4j fails to start** (`container arc-neo4j is unhealthy`):
+**If scans show zeros:** Ensure MCP recon is running and each tool has its own port (see [Reconnaissance tools](#reconnaissance-tools)). Set `MCP_*_URL` in `.env` so the API can reach `mcp-recon` (e.g. `http://mcp-recon:8002` for Subfinder). Use Settings → Check MCP URLs in the UI.
 
-1. Set a non-empty `NEO4J_PASSWORD` in `.env` (required).
-2. Inspect logs: `docker compose logs neo4j`.
-3. If the container exits immediately, try a clean Neo4j volume:  
-   `docker compose down && docker volume rm arc-neo4j-data arc-neo4j-logs 2>/dev/null; docker compose up -d`  
-   (This wipes Neo4j data; only do this for a fresh start.)
-
-**Data persistence and scalability**
-
-- **Neo4j**, **Redis**, and **Elasticsearch** use Docker named volumes (`neo4j-data`, `neo4j-logs`, `redis-data`, `elasticsearch-data`), so data survives container restarts and `docker compose down`.
-- Projects, users, targets, scans, and the attack graph are stored in Neo4j; the API is the only writer, so the graph stays consistent.
-- For production scale you can: run Neo4j Causal Cluster or Aura, use Redis Cluster, add Elasticsearch nodes, and put the API behind a load balancer with sticky sessions if you rely on WebSockets.
-
-### 3. Access Mission Control
-
-Open http://localhost:3000 in your browser.
-
-Default ports:
-- Mission Control: http://localhost:3000
-- API: http://localhost:8080
-- Neo4j Browser: http://localhost:7474
-- Kibana: http://localhost:5601
-
-**Getting real scan results**
-
-Scans run the real reconnaissance pipeline (Subfinder, dnsx, Naabu, Httpx, Katana, Nuclei). If scans complete but **Scan Results** show all zeros (0 subdomains, 0 ports, 0 vulnerabilities), the tools are not returning data. Common causes:
-
-1. **MCP recon server not running or unreachable** – The backend calls MCP tool URLs (e.g. `MCP_SUBFINDER_URL`, `MCP_NUCLEI_URL`) from `.env`. If those services are down or wrong, each phase fails and the pipeline continues with empty data. Start the MCP recon stack (see `mcp/`) and set the `MCP_*_URL` variables so the API can reach them.
-2. **All tools return 404** – Usually every `MCP_*_URL` points to the same host:port (e.g. all to the API or all to port 8000). Each tool must use its **own port**: Naabu=8000, Httpx=8001, Subfinder=8002, dnsx=8003, Katana=8004, Nuclei=8005. In `.env` set each URL separately (e.g. `MCP_SUBFINDER_URL=http://mcp-recon:8002`). Run **Settings → Check MCP URLs** in the UI; if any show "Wrong server" or "404", fix that URL and restart API and `mcp-recon`.
-3. **Tool binaries not installed (fallback)** – When MCP fails, the backend falls back to running tools as subprocesses (e.g. `subfinder`, `naabu`, `nuclei`). If those binaries are not on the `PATH` of the container/host running the API, you get "Tool not found" and empty results.
-4. **Check backend logs** – Look for messages like `Subdomain enumeration failed`, `MCP connection failed`, `Tool not found`, or phase-specific errors. They indicate which tool or connection is failing.
-5. **Naabu/port scan failed (e.g. "rosetta error" on Apple Silicon)** – The MCP image builds for the host architecture (amd64 or arm64). On Apple Silicon, rebuild so native ARM64 binaries are used: `docker compose build mcp-recon && docker compose up -d mcp-recon`. No need for `--platform linux/amd64`.
-
-After fixing MCP or installing tools, run a scan again (e.g. target `scanme.nmap.org` or `testphp.vulnweb.com`); results should then appear in Scan Results and in Targets/Vulnerabilities.
-
-## Project Structure
-
-```
-arc/
-├── docs/                    # Implementation plans (IMPLEMENTATION_ROADMAP.md, EXTENDED_RECON_IMPLEMENTATION.md)
-├── backend/                 # Python FastAPI backend
-│   ├── src/
-│   │   ├── api/            # REST & WebSocket endpoints
-│   │   ├── core/           # Config, logging, exceptions
-│   │   ├── graph/          # Neo4j client and models
-│   │   └── recon/          # Reconnaissance pipeline
-│   ├── Dockerfile
-│   └── requirements.txt
-├── webapp/                  # Next.js frontend
-│   ├── src/
-│   │   ├── app/            # Next.js app router pages
-│   │   ├── components/     # Reusable components
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── lib/            # Utilities and API client
-│   │   ├── store/          # Zustand state management
-│   │   └── types/          # TypeScript definitions
-│   ├── Dockerfile
-│   └── package.json
-├── mcp/                     # MCP tool servers
-│   ├── servers/            # FastMCP server implementations
-│   ├── Dockerfile.recon
-│   └── requirements.txt
-├── infrastructure/          # Infrastructure configs
-│   └── logstash/           # ELK pipeline configuration
-├── docker-compose.yml       # Production Docker Compose
-├── pyproject.toml          # Python project config
-└── .env.example            # Environment template
-```
+---
 
 ## Development
 
-### Backend Development
+### Backend
 
 ```bash
 cd backend
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-
-# Install dependencies
+python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-
-# Run development server
-uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8080
+# Run API (from repo root so PYTHONPATH can resolve)
+PYTHONPATH=src uvicorn api.main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-### Frontend Development
+### Frontend
 
 ```bash
 cd webapp
-
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
 ```
 
-**If you see** `npm warn Unknown env config "devdir"`: some environments (e.g. Cursor IDE) set `NPM_CONFIG_DEVDIR`, which npm does not recognize. Use the project’s npm wrapper so npm runs without that variable (recommended, stable workaround):
+If you see npm warnings about `NPM_CONFIG_DEVDIR`, use the project wrapper: `./npmw run dev` (or `npmw.cmd` on Windows).
 
-- **macOS/Linux:** `./npmw install`, `./npmw run dev`, `./npmw run type-check`, etc.
-- **Windows (cmd):** `npmw.cmd run dev`, `npmw.cmd run type-check`, etc.
-- **Windows (PowerShell / any):** `node scripts/run-npm-without-devdir.js run dev`
-
-After `npm install`, if the variable is set, a one-line tip will remind you to use `./npmw` for future commands.
-
-### Running Tests
+### Tests
 
 ```bash
-# Backend tests (requires venv with dependencies: pip install -r requirements.txt)
-cd backend
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pytest
+# Backend (from backend with venv active)
+cd backend && pytest
 
-# Verify extended recon backend imports (same venv)
-cd backend && PYTHONPATH=src python scripts/verify_recon_extensions.py
+# Or via Docker
+make test-api
 
-# Frontend tests
-cd webapp
-npm test
+# Frontend
+cd webapp && npm test
+# Or: make test-webapp
 ```
 
-## API Documentation
+---
 
-When running in development mode, API documentation is available at:
-- Swagger UI: http://localhost:8080/docs
-- ReDoc: http://localhost:8080/redoc
+## API overview
 
-## Security Considerations
+| Prefix | Description |
+|--------|-------------|
+| `/api/v1/auth` | Login, register, refresh |
+| `/api/v1/projects` | Projects CRUD |
+| `/api/v1/targets` | Targets per project |
+| `/api/v1/scans` | Create scan, list, get results |
+| `/api/v1/vulnerabilities` | List/filter vulns, summary |
+| `/api/v1/findings` | Manual findings CRUD |
+| `/api/v1/reports` | Generate/export reports |
+| `/api/v1/graph` | Graph data, stats, attack paths |
+| `/api/v1/tools` | Recon tool health (MCP) |
+| `/api/v1/monitoring` | Jobs, trigger re-scan |
+| `/api/v1/settings` | Pipeline tools, etc. |
+| `/api/v1/missions` | Missions |
+| `/api/v1/agents` | Agent chat and tools |
+| `/ws` | WebSocket (query param `token`) |
 
-- All graph queries are filtered by `project_id` for multi-tenant isolation
-- JWT tokens with short expiration for access and longer for refresh
-- Passwords hashed with bcrypt
-- Network isolation between Docker services
-- No sensitive data logged
-- Rate limiting on API endpoints
+---
 
-## Reconnaissance Tools
+## Reconnaissance tools
 
-Core recon tools use ports 8000–8005; extended recon tools use 8006–8012. Each tool has its own port and `MCP_*_URL` in `.env`.
+Core and extended tools each use a dedicated port and `MCP_*_URL` in `.env`. Default host in Docker is `mcp-recon`.
 
 | Tool | Port | Description |
 |------|------|-------------|
-| Naabu | 8000 | Fast port scanning |
-| Httpx | 8001 | HTTP probing and tech detection |
-| Subfinder | 8002 | Passive subdomain discovery |
+| Naabu | 8000 | Port scanning |
+| Httpx | 8001 | HTTP probing |
+| Subfinder | 8002 | Subdomain discovery |
 | dnsx | 8003 | DNS resolution |
 | Katana | 8004 | Web crawling |
 | Nuclei | 8005 | Vulnerability scanning |
-| GAU | 8006 | Wayback / URL discovery |
-| Knockpy | 8007 | Active subdomain brute-force |
+| GAU | 8006 | URL discovery (Wayback, etc.) |
+| Knockpy | 8007 | Subdomain brute-force |
 | Kiterunner | 8008 | API endpoint discovery |
 | Wappalyzer | 8009 | Technology fingerprinting |
 | Whois | 8010 | WHOIS lookups |
 | Shodan | 8011 | Passive recon / InternetDB |
-| GitHub recon | 8012 | Repo / secret discovery |
+| GitHub recon | 8012 | Repos and code search |
 
-## Continuous Monitoring
+Additional MCP servers (GVM, Nikto, Commix, Sliver, Havoc, BloodHound, Certipy, Impacket, CrackMapExec, etc.) use further ports; see `.env.example` and `mcp/servers/`.
 
-When you run the stack with **Docker Compose**, the backend (API + monitoring scheduler) runs **inside the `api` container**. Dependencies are installed in the image; no manual `pip install` is needed. The scheduler starts automatically when the API starts.
+Pipeline tool selection is configurable in **Settings → Pipeline extended tools** (stored in Neo4j; overrides `PIPELINE_EXTENDED_TOOLS` in `.env`).
 
-Use the Monitoring API (requires auth; base URL is your API, e.g. `http://localhost:8080` when using default ports):
+---
 
-- **GET** `/api/v1/monitoring/jobs?project_id=...` — list monitoring jobs (optionally filtered by project)
-- **POST** `/api/v1/monitoring/jobs?project_id=...` — create a job (body: `{ "target": "example.com", "interval_hours": 24 }`)
-- **POST** `/api/v1/monitoring/trigger?project_id=...` — trigger a re-scan now (body: `{ "target": "example.com" }`)
-- **DELETE** `/api/v1/monitoring/jobs/{job_id}` — remove a job
+## Monitoring
 
-Example with Docker (API on port 8080, replace `<project_id>` and use a valid JWT):
+The API runs an internal scheduler when `MONITORING_ENABLED=true`. Authenticated endpoints:
+
+- **POST** `/api/v1/monitoring/jobs?project_id=...` — create job: `{ "target": "example.com", "interval_hours": 24 }`
+- **GET** `/api/v1/monitoring/jobs?project_id=...` — list jobs
+- **POST** `/api/v1/monitoring/trigger?project_id=...` — trigger re-scan: `{ "target": "example.com" }`
+- **DELETE** `/api/v1/monitoring/jobs/{job_id}` — delete job
+
+---
+
+## Lab environment
+
+Optional vulnerable apps for testing (do not expose to the internet):
 
 ```bash
-# Create a monitoring job (re-scan example.com every 24 hours)
-curl -X POST "http://localhost:8080/api/v1/monitoring/jobs?project_id=<project_id>" \
-  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"target": "example.com", "interval_hours": 24}'
-
-# Trigger a re-scan now
-curl -X POST "http://localhost:8080/api/v1/monitoring/trigger?project_id=<project_id>" \
-  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"target": "example.com"}'
+make lab
+# Or: docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d
 ```
 
-Jobs are stored in memory (in the API container); the scheduler runs every 5 minutes and starts a full recon scan for any job whose interval has elapsed. Set `MONITORING_ENABLED=false` in `.env` to disable the scheduler.
+Targets: DVWA (8880), Juice Shop (8881), WebGoat (8882). See `lab/README.md`.
 
-## Pipeline extended tools
+---
 
-During a **full recon** scan, the pipeline runs optional enrichment tools (Whois, GAU, Wappalyzer, Shodan, Knockpy, Kiterunner, GitHub recon). You can choose which of these run:
-
-- **Settings UI:** Dashboard → Settings → **Pipeline extended tools**. Check or uncheck each tool and click **Save pipeline tools**. Only tools that are enabled here and have an MCP URL configured will run.
-- **API:** **GET** `/api/v1/settings/pipeline-tools` returns the current list; **PUT** `/api/v1/settings/pipeline-tools` with body `{ "tools": ["whois", "gau", "wappalyzer", "shodan", "knockpy", "kiterunner", "github_recon"] }` updates it (auth required). Stored in Neo4j; overrides the default from `PIPELINE_EXTENDED_TOOLS` in `.env`.
-
-Default (if not set in Settings): `whois,gau,wappalyzer,shodan`. Add `knockpy`, `kiterunner`, or `github_recon` in Settings to include them in the pipeline.
-
-## Environment Variables
+## Environment variables (main)
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| JWT_SECRET_KEY | Secret for JWT signing (min 32 chars) | Yes |
-| NEO4J_PASSWORD | Neo4j database password | Yes |
-| MONITORING_ENABLED | Enable continuous monitoring scheduler (default: true) | No |
-| MONITORING_DEFAULT_INTERVAL_HOURS | Default re-scan interval in hours (1–168, default: 24) | No |
-| PIPELINE_EXTENDED_TOOLS | Comma-separated tools to run in pipeline (default: whois,gau,wappalyzer,shodan; overridable in Settings UI) | No |
-| OPENAI_API_KEY | OpenAI API key for AI features | No |
-| ANTHROPIC_API_KEY | Anthropic API key for AI features | No |
-| LLM_PROVIDER | Primary LLM provider (openai/anthropic) | No |
+| `JWT_SECRET_KEY` | JWT signing secret (min 32 chars) | Yes |
+| `NEO4J_PASSWORD` | Neo4j password | Yes |
+| `CORS_ORIGINS` | Comma-separated origins (e.g. http://localhost:3000) | Yes for browser |
+| `POSTGRES_PASSWORD` | PostgreSQL password | Yes for API |
+| `MCP_*_URL` | Per-tool MCP base URLs | For real scan results |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | LLM for agents | Optional |
+| `MONITORING_ENABLED` | Enable monitoring scheduler (default: true) | No |
+| `PIPELINE_EXTENDED_TOOLS` | Default pipeline tools (overridable in Settings) | No |
+
+See `.env.example` for the full list.
+
+---
+
+## Security
+
+- Multi-tenant isolation: graph and API filter by `project_id`.
+- JWT access and refresh tokens; bcrypt password hashing (72-byte limit handled).
+- No sensitive values in logs; rate limiting on API (WebSocket upgrade excluded).
+- CORS and env-based configuration; no hardcoded secrets.
+
+---
 
 ## License
 
-MIT License
+MIT License.
+
+---
 
 ## Contributing
 
-Contributions are welcome. Please read the contributing guidelines before submitting a pull request.
+Contributions are welcome. Open an issue or pull request on [GitHub](https://github.com/heytherevibin/Project-Arc).
